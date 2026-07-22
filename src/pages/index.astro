@@ -1,0 +1,40 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { formatDate, getPublishedPosts } from '../lib/posts';
+
+const allPosts = await getCollection('posts');
+const posts = getPublishedPosts(allPosts, import.meta.env.DEV);
+---
+
+<BaseLayout description="记录学习过程与心得的个人博客">
+  <section class="page-intro">
+    <h1>t31rycld8的博客</h1>
+    <p>记录学习过程、思考与心得。写给自己，也写给后来的自己。</p>
+  </section>
+
+  {posts.length === 0 ? (
+    <p class="empty-state">还没有文章。在 <code>src/content/posts/</code> 新建一个 Markdown 文件即可开始。</p>
+  ) : (
+    <ul class="post-list">
+      {posts.map((post) => (
+        <li class="post-item">
+          <h2 class="post-item__title">
+            <a href={`/posts/${post.id}`}>{post.data.title}</a>
+          </h2>
+          <div class="post-item__meta">
+            <time datetime={post.data.date.toISOString()}>{formatDate(post.data.date)}</time>
+            {post.data.tags.length > 0 && (
+              <ul class="tag-list">
+                {post.data.tags.map((tag) => (
+                  <li>{tag}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <p class="post-item__desc">{post.data.description}</p>
+        </li>
+      ))}
+    </ul>
+  )}
+</BaseLayout>

@@ -1,0 +1,42 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { formatDate, getPublishedPosts } from '../lib/posts';
+
+const allPosts = await getCollection('posts');
+const posts = getPublishedPosts(allPosts, import.meta.env.DEV);
+
+const grouped = posts.reduce<Record<string, typeof posts>>((acc, post) => {
+  const year = String(post.data.date.getFullYear());
+  if (!acc[year]) acc[year] = [];
+  acc[year].push(post);
+  return acc;
+}, {});
+
+const years = Object.keys(grouped).sort((a, b) => Number(b) - Number(a));
+---
+
+<BaseLayout title="归档" description="按年份浏览全部学习笔记">
+  <section class="page-intro">
+    <h1>归档</h1>
+    <p>共 {posts.length} 篇文章，按年份浏览。</p>
+  </section>
+
+  {years.length === 0 ? (
+    <p class="empty-state">暂无文章。</p>
+  ) : (
+    years.map((year) => (
+      <section class="archive-year">
+        <h2>{year}</h2>
+        <ul>
+          {grouped[year].map((post) => (
+            <li>
+              <time datetime={post.data.date.toISOString()}>{formatDate(post.data.date)}</time>
+              <a href={`/posts/${post.id}`}>{post.data.title}</a>
+            </li>
+          ))}
+        </ul>
+      </section>
+    ))
+  )}
+</BaseLayout>
