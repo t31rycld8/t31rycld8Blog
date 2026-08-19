@@ -1,6 +1,6 @@
 ---
 title: SQL注入
-description: 
+description: SQL注入学习记录
 date: 2026-08-19
 tags: [Web, SQL]
 draft: true
