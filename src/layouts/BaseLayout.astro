@@ -1,14 +1,39 @@
 ---
+import { getCollection } from 'astro:content';
+import type { MarkdownHeading } from 'astro';
 import '../styles/global.css';
+import { buildCategories, getPublishedPosts, postUrl } from '../lib/posts';
+import type { CategoryData } from '../lib/posts';
 
 interface Props {
   title?: string;
   description?: string;
+  toc?: MarkdownHeading[];
 }
 
-const { title, description = '记录学习过程与心得的个人博客' } = Astro.props;
-const pageTitle = title ? `${title} · t31rycld8的博客` : 't31rycld8的博客';
-const pathname = Astro.url.pathname;
+const {
+  title,
+  description = '记录 Web 安全与逆向工程学习过程的个人知识库',
+  toc = [],
+} = Astro.props;
+
+const allPosts = await getCollection('posts');
+const categories: CategoryData[] = buildCategories(
+  getPublishedPosts(allPosts, import.meta.env.DEV),
+);
+const pathname = Astro.url.pathname.replace(/\/+$/, '') || '/';
+const pageTitle = title ? `${title} · t31rycld8 的博客` : 't31rycld8 的博客';
+
+const currentCategory = categories.find(
+  (category) =>
+    pathname === `/${category.slug}` || pathname.startsWith(`/${category.slug}/`),
+);
+const showSidebar = Boolean(currentCategory);
+const showToc = toc.length > 0;
+
+function isCategoryActive(slug: string): boolean {
+  return pathname === `/${slug}` || pathname.startsWith(`/${slug}/`);
+}
 ---
 
 <!doctype html>
@@ -22,22 +47,162 @@ const pathname = Astro.url.pathname;
   </head>
   <body>
     <header class="site-header">
-      <div class="site-header__inner">
-        <a class="site-brand" href="/">t31rycld8的博客</a>
-        <nav class="site-nav" aria-label="主导航">
-          <a href="/" aria-current={pathname === '/' ? 'page' : undefined}>首页</a>
-          <a href="/archive" aria-current={pathname.startsWith('/archive') ? 'page' : undefined}>归档</a>
-          <a href="/about" aria-current={pathname.startsWith('/about') ? 'page' : undefined}>关于</a>
-        </nav>
+      <div class="site-header__row site-header__row--main">
+        <div class="site-header__inner">
+          <a class="site-brand" href="/">t31rycld8 的博客</a>
+          <nav class="site-nav" aria-label="主导航">
+            <a href="/" aria-current={pathname === '/' ? 'page' : undefined}>首页</a>
+            <a href="/archive" aria-current={pathname.startsWith('/archive') ? 'page' : undefined}>归档</a>
+            <a href="/about" aria-current={pathname.startsWith('/about') ? 'page' : undefined}>关于</a>
+          </nav>
+          <form class="site-search" action="/search" method="get" role="search">
+            <input class="site-search__input" name="q" type="search" placeholder="搜索…" autocomplete="off" aria-label="搜索" />
+            <div class="site-search__dropdown" hidden></div>
+          </form>
+        </div>
+      </div>
+      <div class="site-header__row site-header__row--categories">
+        <div class="site-header__inner site-header__categories">
+          {categories.map((category) => (
+            <a
+              class:list={['site-header__category-link', { 'is-active': isCategoryActive(category.slug) }]}
+              href={`/${category.slug}`}
+            >
+              {category.name}
+            </a>
+          ))}
+        </div>
       </div>
     </header>
-    <main class="site-main">
-      <slot />
-    </main>
+    <div
+      class="site-shell"
+      class:list={{ 'site-shell--sidebar': showSidebar, 'site-shell--article': showToc }}
+    >
+      {showSidebar && currentCategory && (
+        <aside class="site-sidebar" aria-label="子栏目导航">
+          <nav class="sidebar-nav">
+            <p class="sidebar-nav__title">
+              <a href={`/${currentCategory.slug}`}>{currentCategory.name}</a>
+              <span class="sidebar-nav__count">{currentCategory.postCount} 篇</span>
+            </p>
+            {currentCategory.subcategories.map((subcategory) => {
+              const subActive =
+                pathname === `/${currentCategory.slug}/${subcategory.slug}` ||
+                subcategory.posts.some((post) => pathname === postUrl(post));
+              return (
+                <details
+                  class:list={['sidebar-group', { 'is-active': subActive }]}
+                  open={subActive}
+                >
+                  <summary>
+                    <a
+                      class="sidebar-subgroup__link"
+                      href={`/${currentCategory.slug}/${subcategory.slug}`}
+                    >
+                      {subcategory.name}
+                    </a>
+                    <span class="sidebar-subgroup__count">{subcategory.posts.length}</span>
+                  </summary>
+                  <ul class="sidebar-post-list">
+                    {subcategory.posts.map((post) => (
+                      <li>
+                        <a
+                          class:list={['sidebar-post', { 'is-active': pathname === postUrl(post) }]}
+                          href={postUrl(post)}
+                        >
+                          {post.data.title}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              );
+            })}
+          </nav>
+        </aside>
+      )}
+      <main class="site-main">
+        <slot />
+      </main>
+      {showToc && (
+        <nav class="site-toc" aria-label="文章目录">
+          <p class="site-toc__title">本页目录</p>
+          <ul class="site-toc__list">
+            {toc.map((heading) => (
+              <li class:list={[`site-toc__depth-${heading.depth}`]}>
+                <a href={`#${heading.slug}`}>{heading.text}</a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      )}
+    </div>
     <footer class="site-footer">
       <div class="site-footer__inner">
-        <p>&copy; {new Date().getFullYear()} t31rycld8的博客</p>
+        <p>&copy; {new Date().getFullYear()} t31rycld8 的博客</p>
       </div>
     </footer>
+    <script>
+      import { getIndex, filterIndex, escapeHtml } from '../scripts/search';
+
+      const tocLinks = Array.from(document.querySelectorAll<HTMLAnchorElement>('.site-toc__list a'));
+      if (tocLinks.length > 0) {
+        const ids = tocLinks.map((link) => decodeURIComponent(link.getAttribute('href')!.slice(1)));
+        const headings = ids
+          .map((id) => document.getElementById(id))
+          .filter((el): el is HTMLElement => el !== null);
+        const headerOffset = 110;
+        const updateActive = () => {
+          const marker = window.scrollY + headerOffset;
+          let current = headings[0];
+          for (const heading of headings) {
+            if (heading.getBoundingClientRect().top + window.scrollY <= marker) current = heading;
+          }
+          tocLinks.forEach((link, i) => {
+            link.classList.toggle('is-active', headings[i] === current);
+          });
+        };
+        updateActive();
+        window.addEventListener('scroll', updateActive, { passive: true });
+        window.addEventListener('resize', updateActive);
+      }
+
+      const searchForm = document.querySelector<HTMLFormElement>('.site-search');
+      const searchInput = searchForm?.querySelector<HTMLInputElement>('.site-search__input') ?? null;
+      const searchDropdown = searchForm?.querySelector<HTMLElement>('.site-search__dropdown') ?? null;
+
+      if (searchInput && searchDropdown) {
+        async function renderDropdown(): Promise<void> {
+          const q = searchInput.value.trim();
+          if (!q) {
+            searchDropdown.hidden = true;
+            return;
+          }
+          const index = await getIndex();
+          const hits = filterIndex(index, q).slice(0, 8);
+          if (hits.length === 0) {
+            searchDropdown.hidden = false;
+            searchDropdown.innerHTML = '<div class="site-search__empty">未找到相关文章</div>';
+            return;
+          }
+          searchDropdown.hidden = false;
+          searchDropdown.innerHTML = hits
+            .map(
+              (hit) => `
+                <a class="site-search__item" href="${hit.url}">
+                  <span class="site-search__item-title">${escapeHtml(hit.title)}</span>
+                  <span class="site-search__item-meta">${escapeHtml(hit.category)} · ${escapeHtml(hit.subcategory)} · ${escapeHtml(hit.date)}</span>
+                </a>`,
+            )
+            .join('');
+        }
+
+        searchInput.addEventListener('input', renderDropdown);
+        searchInput.addEventListener('focus', renderDropdown);
+        document.addEventListener('click', (event) => {
+          if (!searchForm?.contains(event.target as Node)) searchDropdown.hidden = true;
+        });
+      }
+    </script>
   </body>
 </html>

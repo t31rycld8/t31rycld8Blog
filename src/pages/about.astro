@@ -2,18 +2,21 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 ---
 
-<BaseLayout title="关于" description="关于 t31rycld8的博客">
+<BaseLayout title="关于" description="关于 t31rycld8 的博客">
   <section class="page-intro">
     <h1>关于</h1>
-    <p>这是我的个人学习博客。</p>
+    <p>这是我的个人学习知识库。</p>
   </section>
 
   <div class="prose">
     <p>
-      这里用来记录学习过程、踩坑经验与阶段性心得。内容不追求完美，但尽量写清楚「学了什么、怎么想、得到什么」。
+      这里用来记录 Web 安全与逆向工程的学习过程、踩坑经验与阶段性心得。内容按栏目整理：
+      <a href="/web">Web 安全</a> 与 <a href="/reverse">Reverse 逆向</a>，每个栏目下再分子分类，
+      所有文章都放在 <code>src/content/posts/栏目/子分类/</code> 目录下，结构即分类。
     </p>
     <p>
-      发文方式很简单：在 <code>src/content/posts/</code> 新建一个 Markdown 文件，填写标题、日期和正文即可。
+      发文方式很简单：在对应栏目、子分类目录下新建一个 Markdown 文件，填写标题、日期、标签和正文即可；
+      新增子分类只需新建目录，没有文章的目录会自动隐藏。
     </p>
     <p>
       若你也在学习路上，欢迎把这里当作一份公开的学习档案来翻阅。

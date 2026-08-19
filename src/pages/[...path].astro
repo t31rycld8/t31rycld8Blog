@@ -1,0 +1,224 @@
+---
+import { getCollection, render } from 'astro:content';
+import type { MarkdownHeading } from 'astro';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import {
+  formatDate,
+  getPublishedPosts,
+  buildCategories,
+  postUrl,
+  getCategorySlug,
+  getSubcategorySlug,
+} from '../lib/posts';
+import type { CategoryData, SubcategoryData, Post } from '../lib/posts';
+
+interface RouteProps {
+  kind: 'category' | 'subcategory' | 'post';
+  category: CategoryData;
+  subcategory?: SubcategoryData;
+  post?: Post;
+  categories: CategoryData[];
+}
+
+export async function getStaticPaths() {
+  const allPosts = await getCollection('posts');
+  const posts = getPublishedPosts(allPosts, import.meta.env.DEV);
+  const categories = buildCategories(posts);
+
+  const paths: {
+    params: { path: string };
+    props: RouteProps;
+  }[] = [];
+
+  for (const category of categories) {
+    paths.push({
+      params: { path: category.slug },
+      props: { kind: 'category', category, categories },
+    });
+    for (const subcategory of category.subcategories) {
+      paths.push({
+        params: { path: `${category.slug}/${subcategory.slug}` },
+        props: { kind: 'subcategory', category, subcategory, categories },
+      });
+    }
+  }
+
+  for (const post of posts) {
+    const category = categories.find((c) => c.slug === getCategorySlug(post))!;
+    const subcategory = category.subcategories.find(
+      (s) => s.slug === getSubcategorySlug(post),
+    );
+    paths.push({
+      params: { path: post.id },
+      props: { kind: 'post', post, category, subcategory, categories },
+    });
+  }
+
+  return paths;
+}
+
+const { kind, category, subcategory, post, categories } = Astro.props;
+
+let toc: MarkdownHeading[] = [];
+let Content: any;
+let prev: Post | null = null;
+let next: Post | null = null;
+
+if (kind === 'post') {
+  const rendered = await render(post!);
+  Content = rendered.Content;
+  toc = rendered.headings.filter((heading) => heading.depth >= 2 && heading.depth <= 3);
+
+  const siblings =
+    category.subcategories.find((s) => s.slug === getSubcategorySlug(post!))?.posts ?? [];
+  const index = siblings.findIndex((p) => p.id === post!.id);
+  if (index > 0) prev = siblings[index - 1];
+  if (index !== -1 && index < siblings.length - 1) next = siblings[index + 1];
+}
+
+const pageTitle =
+  kind === 'post'
+    ? post!.data.title
+    : kind === 'subcategory'
+      ? `${category.name} · ${subcategory!.name}`
+      : category.name;
+const pageDescription =
+  kind === 'post' ? post!.data.description : category.description;
+---
+
+<BaseLayout title={pageTitle} description={pageDescription} toc={toc}>
+  {kind === 'category' && (
+    <>
+      <section class="page-intro">
+        <nav class="breadcrumb" aria-label="面包屑">
+          <a href="/">首页</a>
+          <span>/</span>
+          <span aria-current="page">{category.name}</span>
+        </nav>
+        <h1>{category.name}</h1>
+        <p>{category.description}</p>
+      </section>
+
+      {category.subcategories.length === 0 ? (
+        <p class="empty-state">该栏目下暂时没有子分类。</p>
+      ) : (
+        category.subcategories.map((sub) => (
+          <section class="subcategory-block">
+            <h2>
+              <a href={`/${category.slug}/${sub.slug}`}>{sub.name}</a>
+              <span class="count">{sub.posts.length} 篇</span>
+            </h2>
+            <ul class="post-list">
+              {sub.posts.map((p) => (
+                <li class="post-item">
+                  <h3 class="post-item__title">
+                    <a href={postUrl(p)}>{p.data.title}</a>
+                  </h3>
+                  <div class="post-item__meta">
+                    <time datetime={p.data.date.toISOString()}>{formatDate(p.data.date)}</time>
+                    {p.data.tags.length > 0 && (
+                      <ul class="tag-list">
+                        {p.data.tags.map((tag) => <li>{tag}</li>)}
+                      </ul>
+                    )}
+                  </div>
+                  <p class="post-item__desc">{p.data.description}</p>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))
+      )}
+    </>
+  )}
+
+  {kind === 'subcategory' && (
+    <>
+      <section class="page-intro">
+        <nav class="breadcrumb" aria-label="面包屑">
+          <a href="/">首页</a>
+          <span>/</span>
+          <a href={`/${category.slug}`}>{category.name}</a>
+          <span>/</span>
+          <span aria-current="page">{subcategory!.name}</span>
+        </nav>
+        <h1>{subcategory!.name}</h1>
+        <p>{subcategory!.posts.length} 篇文章，属于「{category.name}」栏目。</p>
+      </section>
+
+      {subcategory!.posts.length === 0 ? (
+        <p class="empty-state">该子分类下暂无文章。</p>
+      ) : (
+        <ul class="post-list">
+          {subcategory!.posts.map((p) => (
+            <li class="post-item">
+              <h2 class="post-item__title">
+                <a href={postUrl(p)}>{p.data.title}</a>
+              </h2>
+              <div class="post-item__meta">
+                <time datetime={p.data.date.toISOString()}>{formatDate(p.data.date)}</time>
+                {p.data.tags.length > 0 && (
+                  <ul class="tag-list">
+                    {p.data.tags.map((tag) => <li>{tag}</li>)}
+                  </ul>
+                )}
+              </div>
+              <p class="post-item__desc">{p.data.description}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  )}
+
+  {kind === 'post' && post && (
+    <article>
+      <nav class="breadcrumb" aria-label="面包屑">
+        <a href="/">首页</a>
+        <span>/</span>
+        <a href={`/${category.slug}`}>{category.name}</a>
+        <span>/</span>
+        <a href={`/${category.slug}/${subcategory!.slug}`}>{subcategory!.name}</a>
+        <span>/</span>
+        <span aria-current="page">{post.data.title}</span>
+      </nav>
+      <header class="post-header">
+        <h1>{post.data.title}</h1>
+        <div class="post-header__meta">
+          <time datetime={post.data.date.toISOString()}>{formatDate(post.data.date)}</time>
+          {post.data.tags.length > 0 && (
+            <ul class="tag-list">
+              {post.data.tags.map((tag) => <li>{tag}</li>)}
+            </ul>
+          )}
+        </div>
+      </header>
+      <div class="prose">
+        <Content />
+      </div>
+      {(prev || next) && (
+        <nav class="post-nav" aria-label="上一篇/下一篇">
+          {prev ? (
+            <a class="post-nav__link" href={postUrl(prev)}>
+              <span class="post-nav__label">← 上一篇</span>
+              {prev.data.title}
+            </a>
+          ) : (
+            <span />
+          )}
+          {next ? (
+            <a class="post-nav__link post-nav__link--next" href={postUrl(next)}>
+              <span class="post-nav__label">下一篇 →</span>
+              {next.data.title}
+            </a>
+          ) : (
+            <span />
+          )}
+        </nav>
+      )}
+      <p class="post-back">
+        <a href={`/${category.slug}/${subcategory!.slug}`}>← 返回「{subcategory!.name}」</a>
+      </p>
+    </article>
+  )}
+</BaseLayout>

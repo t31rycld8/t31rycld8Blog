@@ -1,40 +1,46 @@
 ---
 import { getCollection } from 'astro:content';
 import BaseLayout from '../layouts/BaseLayout.astro';
-import { formatDate, getPublishedPosts } from '../lib/posts';
+import { buildCategories, getPublishedPosts } from '../lib/posts';
 
 const allPosts = await getCollection('posts');
 const posts = getPublishedPosts(allPosts, import.meta.env.DEV);
+const categories = buildCategories(posts);
 ---
 
-<BaseLayout description="记录学习过程与心得的个人博客">
+<BaseLayout description="记录 Web 安全与逆向工程学习过程与心得的个人知识库">
   <section class="page-intro">
-    <h1>t31rycld8的博客</h1>
-    <p>记录学习过程、思考与心得。写给自己，也写给后来的自己。</p>
+    <h1>t31rycld8 的博客</h1>
+    <p>Web 安全与逆向工程的学习笔记，按栏目整理，像 CTFwiki 一样可以按分类查阅。</p>
   </section>
 
-  {posts.length === 0 ? (
-    <p class="empty-state">还没有文章。在 <code>src/content/posts/</code> 新建一个 Markdown 文件即可开始。</p>
+  {categories.length === 0 ? (
+    <p class="empty-state">
+      还没有文章。在 <code>src/content/posts/栏目/子分类/</code> 下新建 Markdown 文件即可开始。
+    </p>
   ) : (
-    <ul class="post-list">
-      {posts.map((post) => (
-        <li class="post-item">
-          <h2 class="post-item__title">
-            <a href={`/posts/${post.id}`}>{post.data.title}</a>
-          </h2>
-          <div class="post-item__meta">
-            <time datetime={post.data.date.toISOString()}>{formatDate(post.data.date)}</time>
-            {post.data.tags.length > 0 && (
-              <ul class="tag-list">
-                {post.data.tags.map((tag) => (
-                  <li>{tag}</li>
-                ))}
-              </ul>
-            )}
+    <div class="category-cards">
+      {categories.map((category) => (
+        <section class="category-card">
+          <div class="category-card__head">
+            <h2><a href={`/${category.slug}`}>{category.name}</a></h2>
+            <span class="category-card__count">{category.postCount} 篇文章</span>
           </div>
-          <p class="post-item__desc">{post.data.description}</p>
-        </li>
+          <p class="category-card__desc">{category.description}</p>
+          {category.subcategories.length > 0 && (
+            <ul class="category-card__subs">
+              {category.subcategories.map((sub) => (
+                <li>
+                  <a href={`/${category.slug}/${sub.slug}`}>
+                    {sub.name}<span class="category-card__sub-count">{sub.posts.length}</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
+          <a class="category-card__more" href={`/${category.slug}`}>查看全部 →</a>
+        </section>
       ))}
-    </ul>
+    </div>
   )}
 </BaseLayout>

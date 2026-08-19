@@ -1,0 +1,79 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="搜索" description="站内搜索">
+  <section class="page-intro">
+    <h1>搜索</h1>
+    <p>输入关键词，搜索文章标题、标签与正文。</p>
+    <form class="site-search site-search--page" action="/search" method="get" role="search">
+      <input
+        class="site-search__input"
+        id="search-input"
+        name="q"
+        type="search"
+        placeholder="搜索文章…"
+        autocomplete="off"
+        aria-label="搜索文章"
+      />
+    </form>
+  </section>
+  <div id="search-results" class="search-results" aria-live="polite"></div>
+</BaseLayout>
+
+<script>
+  import { getIndex, filterIndex, escapeHtml, highlight } from '../scripts/search';
+  import type { SearchItem } from '../scripts/search';
+
+  const input = document.querySelector<HTMLInputElement>('#search-input');
+  const results = document.querySelector<HTMLElement>('#search-results');
+
+  function renderResults(query: string, index: SearchItem[]): void {
+    if (!results) return;
+    const q = query.trim();
+    if (!q) {
+      results.innerHTML = '<p class="empty-state">输入关键词开始搜索。</p>';
+      return;
+    }
+    const hits = filterIndex(index, q);
+    if (hits.length === 0) {
+      results.innerHTML = `<p class="empty-state">没有找到与“${escapeHtml(q)}”相关的文章。</p>`;
+      return;
+    }
+    results.innerHTML = `
+      <p class="search-results__summary">共找到 ${hits.length} 篇相关文章：</p>
+      <ul class="post-list">
+        ${hits
+          .map(
+            (hit) => `
+              <li class="post-item">
+                <h2 class="post-item__title"><a href="${hit.url}">${highlight(hit.title, q)}</a></h2>
+                <div class="post-item__meta">
+                  <span class="category-badge">${escapeHtml(hit.category)}</span>
+                  <span>${escapeHtml(hit.subcategory)}</span>
+                  <time>${escapeHtml(hit.date)}</time>
+                </div>
+                <p class="post-item__desc">${highlight(hit.description, q)}</p>
+              </li>`,
+          )
+          .join('')}
+      </ul>`;
+  }
+
+  const indexPromise = getIndex();
+
+  indexPromise.then((index) => {
+    const query = new URLSearchParams(window.location.search).get('q') ?? '';
+    if (input) input.value = query;
+    renderResults(query, index);
+  });
+
+  input?.addEventListener('input', () => {
+    const query = input.value.trim();
+    const url = new URL(window.location.href);
+    if (query) url.searchParams.set('q', query);
+    else url.searchParams.delete('q');
+    window.history.replaceState(null, '', url.pathname + url.search);
+    indexPromise.then((index) => renderResults(query, index));
+  });
+</script>
